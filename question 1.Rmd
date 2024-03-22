@@ -1,0 +1,138 @@
+---
+title: "question 1"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-02-26"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(car)
+library(stats)
+library(ggplot2)
+```
+
+```{r}
+# 1.	Generate two datasets with n and p are both large in design matrix, and binary responses from a logistic regression
+n_max <- 500
+p_max <- 200
+sim <- 10000
+beta <- 0.5 # coefficient for AR1 model
+sigma_error <- 0.001 # assume normal distribution of error in AR1 model
+set.seed(23)  
+
+# 1.1 (X1...Xp) is an AR(1) time series with AR coefficient 0.5 and Yj|X1...Xp ~ Bernoulli(0.5)
+# Generate X
+X <- array(0, dim = c(n_max, p_max, sim))
+for (s in 1:sim) {
+  X[, 1, s] <- rnorm(n_max)
+  for (p in 2:p_max){
+    X[,p,s] <- beta*X[,p-1,s] + rnorm(n_max,0,sigma_error)
+  }
+}
+
+# Generate Y
+Y1 <- array(0, dim = c(n_max, sim))  
+for (s in 1:sim) {
+  Y1[, s] <- rbinom(n_max, 1, 0.5)
+}
+
+# Print X and Y to check
+#print(X[2,,1])
+#print(Y1[,1])
+```
+
+```{r}
+# 1.2 (X1...Xp) is an AR(1) time series with AR coefficient 0.5 and Yj|X1...Xp ~ Bernoulli(logit (0.08(X2+...+X21)))
+# Initialize Y2
+set.seed(23)
+Y2 <- array(0, dim = c(n_max, sim))
+
+# Generate Y based on X
+for (s in 1:sim) {
+  Y2[, s] <- rbinom(n_max, 1, 0.5)
+  
+  sum_X <- rowSums(X[, 2:21, s, drop = FALSE])  # Sum of X2 to X21 for simulation s
+  #prob <- 0.08 * sum_X  # Calculate the logit function of the sum
+  prob <- pmax(pmin(0.08 * sum_X, 0.999), 0.001)  # Clip probabilities to [0.001, 0.999] to avoid error
+  
+  logit <- log(prob / (1 - prob))
+  
+  logit_model <- glm(Y2[, s] ~ logit, data = as.data.frame(X[,,s]), family = binomial(link = "logit"))
+  Y2[, s] <- rbinom(n_max, 1, predict(logit_model, type = "response"))
+
+}
+
+# Print Y to check
+#print(Y2[,1])
+```
+
+```{r}
+# 2.	Calculate logistic regression p-values for the coefficient β1 (null in all cases) and plot
+
+# dataset 1
+# Initialize vector to store p-values
+p_values_beta1 <- numeric(sim)
+
+for (s in 1:sim) {
+  logit_model <- glm(Y1[, s] ~ ., data = as.data.frame(X[,,s]), 
+                     family = binomial(link = "logit"),
+                     control = list(maxit = 1000))
+  # Extract p-value for beta1 (V1)
+  summary_logit <- summary(logit_model)
+  p_values_beta1[s] <- summary_logit$coefficients["V1", "Pr(>|z|)"]
+}
+
+# Plot histogram of p-values
+hist(p_values_beta1, main = "Global Null, AR(1) Design", xlab = "p-values",ylab = "counts")
+
+```
+
+```{r}
+# dataset 2
+# Initialize vector to store p-values
+p_values_beta1 <- numeric(sim)
+
+# Loop through simulations
+for (s in 1:sim) {
+  logit_model <- glm(Y2[, s] ~ ., data = as.data.frame(X[,,s]), 
+                     family = binomial(link = "logit"),
+                     control = list(maxit = 1000))
+  
+  # Extract p-value for beta1 (V1)
+  summary_logit <- summary(logit_model)
+  p_values_beta1[s] <- summary_logit$coefficients["V1", "Pr(>|z|)"]
+}
+
+# Plot histogram of p-values
+hist(p_values_beta1, main = "20 Nonzero Coefficients, AR(1) Design", xlab = "p-values",ylab = "counts")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
