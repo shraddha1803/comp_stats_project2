@@ -1,0 +1,116 @@
+---
+title: "question 1"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-02-26"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(car)
+library(stats)
+library(ggplot2)
+```
+
+```{r}
+# Set initial parameters
+n_max <- 500
+p_max <- 200
+sim <- 50
+sim_all <- 100
+beta <- 0.5 
+sigma_error <- 0.1
+
+# Function to calculate adjusted p-value
+calculate_p_value <- function(X_obs, Y_obs1, sim) {
+  
+  logit_model_observed <- glm(Y_obs1[, 1] ~ ., data = as.data.frame(X_obs[,,1]), 
+                     family = binomial(link = "logit"),
+                     control = list(maxit = 1000))
+  
+  beta1_coef_obs <- coef(logit_model_observed)["V1"]
+  summary_logit <- summary(logit_model_observed)
+  p_values_beta1_before <- summary_logit$coefficients["V1", "Pr(>|z|)"]
+  
+  beta1_coef <- numeric(sim)
+  X <- array(0, dim = c(n_max, p_max, sim))
+  Y1 <- array(0, dim = c(n_max, sim)) 
+  
+  for (s in 1:sim) {
+    X[, , s] <- X_obs[, , 1]
+    X[, 1, s] <- (X[, 2, s] - rnorm(n_max, 0, sigma_error))/beta
+    #Y1[, s] <- Y_obs1[, 1]
+    Y1[, s] <- rbinom(n_max, 1, 0.5)
+    
+    logit_model <- glm(Y1[, s] ~ ., data = as.data.frame(X[,,s]), 
+                     family = binomial(link = "logit"),
+                     control = list(maxit = 1000))
+  
+    beta1_coef[s] <- coef(logit_model)["V1"]
+  }
+  
+  p_values_beta1 <- (sum(abs(beta1_coef) >= abs(beta1_coef_obs)) + 1) / (sim + 1)
+  
+  return(list(p_values_before = p_values_beta1_before, p_values_after = p_values_beta1))
+}
+```
+
+```{r}
+# Repeat the process 
+p_values_before_list <- vector("numeric", length = sim_all)
+p_values_after_list <- vector("numeric", length = sim_all)
+
+for (i in 1:sim_all) {
+  set.seed(i)  # Setting seed for reproducibility
+  X_obs <- array(0, dim = c(n_max, p_max, 1))
+  X_obs[, 1, 1] <- rnorm(n_max)
+  for (p in 2:p_max) {
+    X_obs[, p, 1] <- beta * X_obs[, p - 1, 1] + rnorm(n_max, 0, sigma_error)
+  }
+  Y_obs1 <- array(0, dim = c(n_max, 1))
+  Y_obs1[, 1] <- rbinom(n_max, 1, 0.5)
+  
+  p_values <- calculate_p_value(X_obs, Y_obs1, sim_all)
+  
+  p_values_before_list[i] <- p_values$p_values_before
+  p_values_after_list[i] <- p_values$p_values_after
+}
+
+# Plot histogram for p_values_before_list
+hist(p_values_before_list, main = "Histogram of p-values Before Simulation",
+     xlab = "p-values", ylab = "Counts", col = "blue")
+
+# Plot histogram for p_values_after_list
+hist(p_values_after_list, main = "Histogram of p-values After Simulation",
+     xlab = "p-values", ylab = "Counts", col = "red")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
